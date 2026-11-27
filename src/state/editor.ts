@@ -11,7 +11,7 @@ import {
 import { prepareAudio } from "@/lib/audio.js";
 import { player } from "@/editor/player";
 import { ask, confirm, prompt } from "./dialogs";
-import { useSession, loadProject } from "./session";
+import { useSession, loadProject, loadOverview } from "./session";
 import type { DataSet, Doc, Item, Peaks, Seg, StartPlan, Status } from "@/editor/types";
 
 export type Filter = "all" | "unchecked" | "flagged";
@@ -335,11 +335,19 @@ export async function review(status: Extract<Status, "reviewed" | "returned">) {
 
 export function openItem(item: Item) {
   const me = sess().user!.email;
+  const access = item.access || { annotate: true, review: true };
+  const own = item.outputs.find((o) => o.annotator === me);
+  const others = item.outputs.filter((o) => o !== own);
+  if (!access.annotate && !own) { // reviewer only
+    if (!others.length) return toast("Nothing to review yet", { description: "The annotator has not saved this file." });
+    if (others.length === 1) return startEditor(item, { kind: "review", output: others[0] });
+    return useSession.setState({ openFor: item });
+  }
   if (!item.outputs.length) {
     if (!item.sources.length) toast("No draft found for this file: starting blank");
     return startEditor(item, { kind: "new", source: item.sources[0] || null });
   }
-  if (item.outputs.length === 1 && item.outputs[0].annotator === me) return startEditor(item, { kind: "own", output: item.outputs[0] });
+  if (own && !others.length) return startEditor(item, { kind: "own", output: own });
   useSession.setState({ openFor: item });
 }
 
@@ -561,7 +569,7 @@ export async function closeEditor(skipSave = false) {
   if (!s.doc) return;
   player.pause();
   if (!skipSave && (s.rev !== s.savedRev || s.timeDirty)) {
-    useSession.setState({ loading: { text: "Saving to Drive", progress: null } });
+    useSession.setState({ loading: { text: "Saving", progress: null } });
     try { await saveRemote(true); } catch { toast.warning("Kept on this device only", { description: "Open the file again when you're online to upload it." }); }
     useSession.setState({ loading: null });
   }
@@ -570,9 +578,11 @@ export async function closeEditor(skipSave = false) {
   player.unload();
   URL.revokeObjectURL(s.audioUrl);
   put({ ...EMPTY });
-  useSession.setState({ screen: "home" });
+  const back = sess().returnTo;
+  useSession.setState({ screen: back });
   if (history.state?.editor) history.back();
-  loadProject(true);
+  if (back === "admin") loadOverview();
+  else loadProject(true);
 }
 
 /** "Start again from another draft": keeps my output file so no second copy appears. */

@@ -52,6 +52,7 @@ export interface Output {
   spent: number;
   reviewer: string;
   saveid: string;
+  lastBy?: string;
 }
 
 export interface Source { fileId: string; name: string; label: string; ext: string; rank: number }
@@ -63,6 +64,10 @@ export interface Item {
   audio: { fileId: string; name: string; size: number; mimeType: string };
   sources: Source[];
   outputs: Output[];
+  /** From the backend: what this person may do with the file. */
+  access?: { annotate: boolean; review: boolean };
+  /** Admin overview only: who the file is assigned to. */
+  assigned?: { email: string; kind: "annotate" | "review"; at: string; by: string }[];
 }
 
 export interface DataSet { id: string; name: string; outputFolderIds: string[]; items: Item[] }
@@ -74,7 +79,7 @@ export interface User { email: string; name: string; photo?: string }
 export interface Root { id: string; name: string; driveId?: string | null; unresolved?: boolean }
 
 export interface Store {
-  kind: "drive" | "demo";
+  kind: "drive" | "demo" | "api";
   user: User | null;
   expiresAt: number;
   token?: string | null;

@@ -1,230 +1,166 @@
 # AIMScribe Annotator
 
 A web app for correcting machine drafts of the consultation recordings by listening, on a phone or
-a computer. Each teammate signs in with their own Google account; the app reads audio and drafts
-from the Drive folders shared with them and saves their corrections back to Drive.
+a computer, with an admin dashboard for assigning work and following progress.
 
-Built with React, TypeScript, Tailwind and shadcn/ui. It is a static site: no server, no database.
-Drive is the storage and Drive sharing is the access control.
-
-```
- phone / laptop browser                       Google Drive (folders you share)
- ┌──────────────────────┐   sign in (Google)   {set}/audio16k/G01.wav
- │  AIMScribe Annotator │ ───────────────────► {set}/annotation/G01.json   pre-cleaned draft (preferred)
- │  (static files)      │ ◄── audio, drafts ── {set}/drafts_scribe/G01.json|srt|txt
- │                      │ ─── corrections ───► {set}/corrected/G01__rahim.json   one file per annotator
- └──────────────────────┘
-```
-
-Try it with no setup: run it (step 3) and choose **Try the demo**. It uses made-up files and
-synthetic audio and saves only in that browser.
-
-## 1. Google Cloud setup (once, about 10 minutes)
-
-Done by the data lead in the [Google Cloud console](https://console.cloud.google.com/).
-
-1. Create a project, for example `aimscribe-annotator`.
-2. **APIs & Services → Library → Google Drive API → Enable.**
-3. **Google Auth Platform → Get started** (older consoles: *OAuth consent screen*). App name
-   `AIMScribe Annotator`, your email as support contact, audience **External**.
-4. **Audience → Test users:** add the Google email of every teammate (up to 100). Leave the
-   publishing status on **Testing**. Only these accounts can sign in at all.
-5. **Data Access → Add or remove scopes:** add `https://www.googleapis.com/auth/drive`.
-6. **Clients → Create client → Web application.** Under *Authorized JavaScript origins* add
-   `http://localhost:8000` and your hosted address (step 4 below), for example
-   `https://aimscribe-annotator.pages.dev`. No redirect URIs are needed.
-7. Put the client ID (`…apps.googleusercontent.com`) in [public/config.js](public/config.js), or
-   set it on your host as the environment variable `VITE_GOOGLE_CLIENT_ID`.
-
-What teammates will see: a "Google hasn't verified this app" screen on first sign-in. That is
-normal for an app in Testing; they choose **Advanced → Go to AIMScribe Annotator** and tick the
-Drive box. Google asks Testing apps to re-confirm about once a week.
-
-Why full Drive access: annotators must read audio and drafts in folders shared with them and write
-into `corrected/` folders the app did not create. The narrower `drive.file` scope can do neither.
-The app only ever opens the folders added to it.
-
-## 2. Prepare the Drive folders (once per set)
-
-1. **Move every `PRIVATE_id_map.json` out of the folders you will share** (for example into
-   `MyDrive/Aimscribe/private/`). The maps link opaque IDs to file names with phone numbers. The
-   app never lists `PRIVATE_*` files, but anyone with the folder can open them in Drive itself.
-2. Recommended: run `scripts/annotation/preclean_drafts.py` (in the main Aimscribe repository) on each set so `annotation/{id}.json`
-   exists. Annotators then get English words and numbers already in Bangla script, with
-   highlights: red where the model was unsure (listen), blue where the script converted a word
-   (check the spelling), orange for words still in Latin letters. Without it the app uses
-   `drafts_scribe/` and highlights the words the draft model was unsure of in red.
-3. Create a folder named `corrected` inside each set folder.
-4. Share each set folder with the team as **Viewer** (they cannot delete audio or drafts by
-   accident), and each `corrected/` folder as **Editor**. Leave "viewers can download" on: the
-   app needs it to play the audio.
+- **Annotators** sign in with Google for their email only. They never get a Drive permission
+  screen, never paste a link, and see only the files assigned to them.
+- **The admin** (you) connects their Google Drive once. Audio, drafts and every annotation stay
+  in that Drive; nobody else gets access to it.
+- **Anyone can sign up.** A newcomer waits on a "you're on the list" screen and sees no patient
+  audio until the admin approves them or assigns them files.
 
 ```
-test_set/                     ← add this folder in the app (a parent folder works too)
-  audio16k/G01.wav            audio (also: audio/, wav/, or audio directly in the set folder)
-  annotation/G01.json|srt     pre-cleaned draft, used first
-  drafts_scribe/G01.json|srt|txt   machine draft (G01_raw.json is ignored)
-  corrected/G01__rahim.json   written by the app
+ annotator's browser ─┐                       ┌─ your Google Drive
+                      ├─▶ Cloudflare Worker ──┤   audio16k/, drafts, corrected/<ID>__<name>.json
+ admin's browser ─────┘   (this repo)         └─ aimscribe-annotator-state.json (people, roles, assignments)
 ```
 
-Drafts it reads: the pre-clean JSON, the Scribe draft JSON (turns with word timings), SRT and VTT
-(`[S1] [overlap] text`), the scripts' timed TXT, and plain untimed text. Folders named `models`,
-`results`, `scripts`, `public_data`, `diar`, `rttm`, `trimmed_maps`, `eval_silver_v0` and
-`private` are skipped.
+The Worker serves the site and a small API. It holds your Drive key as a Cloudflare secret, checks
+every file request against the assignments, streams audio from Drive, and saves annotations into
+Drive. The list of people and assignments is a JSON file in your Drive too, so nothing about the
+project is stored on Cloudflare. Built with React, TypeScript, Tailwind and shadcn/ui; free on
+Cloudflare Workers.
 
-## 3. Run it on your computer
+## Setup (once, about 15 minutes)
 
-Needs [Node.js](https://nodejs.org) 20 or later.
+### 1. Google Cloud (your OAuth client)
+
+In [console.cloud.google.com](https://console.cloud.google.com) → **Google Auth Platform**:
+
+1. **Clients → your web client → Client secrets: Add secret**, and delete any secret that was ever
+   shared or pasted anywhere. Keep the new one for step 2.
+2. Same client → **Authorized redirect URIs → Add**:
+   `https://aimscribe-annotator.sahilfarib320.workers.dev/api/admin/drive/callback`
+   (Authorized JavaScript origins keep `https://aimscribe-annotator.sahilfarib320.workers.dev`.)
+3. **Audience → Publish app** (status *In production*). Teammates only share their email with the
+   app, so Google needs no review for them, and the test-user list no longer limits who can join.
+   You, as the owner, will see an "unverified app" warning once when you connect Drive: choose
+   **Advanced → Go to AIMScribe Annotator**.
+
+### 2. Cloudflare secrets
+
+Cloudflare → **Workers & Pages → aimscribe-annotator → Settings → Variables and Secrets → Add**,
+type **Secret**:
+
+| Name | Value |
+| --- | --- |
+| `GOOGLE_CLIENT_SECRET` | the new client secret from step 1.1 |
+| `ADMIN_EMAILS` | your Google email (several: comma-separated) |
+
+`GOOGLE_CLIENT_ID` is public and already in `wrangler.jsonc` and `public/config.js`.
+
+### 3. Deploy
+
+Cloudflare builds and deploys every push to `main` (`wrangler.jsonc` runs the site build, then
+deploys the Worker). In the project's **Settings → Build**, the deploy command is
+`npx wrangler deploy`; add `NODE_VERSION` = `22` as a build variable if the build complains about
+Node.
+
+### 4. Connect your Drive (in the app)
+
+1. Open the site and sign in with the email in `ADMIN_EMAILS`. You land on the dashboard.
+2. **Settings → Connect Drive**, choose your account, tick **Google Drive**.
+3. The next page shows a key. Add it as one more Cloudflare **Secret** named
+   `DRIVE_REFRESH_TOKEN`, then press **I've saved it: check again** in Settings.
+4. **Settings → Set folders**: paste the links of `test_set`, `dev_set` and `train_set`.
+
+### 5. Assign work
+
+1. **People → Copy invite link** and send it to anyone. When they sign in they appear under
+   *Waiting for access*. You can also add people by email in advance.
+2. **Tasks**: pick a set, tick files (or **Next 10 unassigned**), choose a person, choose
+   **Annotate** or **Review**, press **Assign**. Assigning work also approves the person.
+3. **Overview** shows files finished, audio left, an estimate of working hours left at the team's
+   pace (hours per speech hour, the *r* in docs/02), who is doing what, the review queue and the
+   latest saves. **Block** or **Remove** a person in People and they lose access at once; their
+   saved work stays in your Drive.
+
+## Who can see what
+
+Checked by the Worker on every request, not just hidden in the page:
+
+| Person | Can open |
+| --- | --- |
+| Not yet approved | Nothing |
+| Annotator | Audio and drafts of files assigned to them, and their own annotation of each. Not other people's annotations of the same file, so double annotation stays independent |
+| Reviewer | Files assigned to them for review, including every annotation of those files; their edits go into the annotator's file and are marked as theirs |
+| Admin | Everything, plus the dashboard |
+
+`PRIVATE_*` files are never listed or served, even to admins. Audio is streamed into the browser's
+memory and never saved on the device; unsaved edits are kept on the device until they reach Drive.
+
+## The data in your Drive
+
+```
+test_set/                     a set folder you add in Settings
+  audio16k/G01.wav            audio
+  annotation/G01.json|srt     pre-cleaned draft (preclean_drafts.py), used first
+  drafts_scribe/G01.json|srt  machine draft
+  corrected/G01__rahim.json   one file per annotator, written by the app
+aimscribe-annotator-state.json   in My Drive: people, roles, assignments, set folders
+```
+
+Drafts it reads: the pre-clean JSON, the Scribe draft JSON, SRT and VTT (`[S1] [overlap] text`),
+the scripts' timed TXT, and plain untimed text. An annotation file:
+
+```json
+{
+ "schema": "aimscribe-annotation/1", "audio": "G01", "source": "annotation/G01.json",
+ "annotator": {"email": "rahim@…", "name": "Rahim"}, "status": "done",
+ "review": {"by": "…", "name": "…", "at": "…", "note": "…"},
+ "speakers": {"S1": {"role": "ডাক্তার"}}, "time_spent_sec": 3720,
+ "segments": [{"start": 3.6, "end": 8.9, "speaker": "S2", "text": "…", "overlap": false, "checked": true, "draft": "…"}]
+}
+```
+
+Check a file and collect its drug names, from the main Aimscribe repository:
+
+```powershell
+python scripts/annotation/import_corrected.py corrected/G01__rahim.json out/G01.json
+```
+
+## Annotating
+
+On a computer: transcript in the middle (speaker left, times above and below each line), the
+segment's properties on the right, speaker-lane timeline at the bottom. On a phone: times down the
+left edge, a floating player, and **Edit segment** for a sheet with a zoomed waveform and two
+handles. Tap a segment to hear it; the orange **Check & next** ticks it and plays the next one;
+**Mark as done** sends it for review. Keyboard shortcuts are under **⋯ → Keyboard shortcuts**.
+
+## Run it on your computer
+
+Needs Node.js 20 or later.
 
 ```powershell
 npm install
 ```
 
 ```powershell
-npm run dev
+npm run dev:api
 ```
 
-Then open http://localhost:8000. `npm run build` writes the finished site to `dist/`.
+Then open http://localhost:8787. With the file `.dev.vars` containing `DEMO=1` (not committed),
+this uses a made-up in-memory Drive, and the sign-in screen lets you sign in as any email:
+`admin@demo.test` is the admin. Never set `DEMO` in Cloudflare.
 
-## 4. Host it for free
+`npm test` runs the tests for folder matching, draft readers and checks. `npm run build` type-checks
+and builds.
 
-Any static host works, because the site is about 1.2 MB of files. Audio never passes through the
-host: it goes straight from Google Drive to each teammate's browser, so bandwidth limits do not
-matter. Each option below gives an `https://` address, which phones need.
+## Limits of the free plan
 
-| Host | Free tier | Private GitHub repo | Notes |
-| --- | --- | --- | --- |
-| **Cloudflare Pages** (recommended) | 500 builds a month; static traffic is not metered | Yes | Redeploys on every push; no commercial-use restriction |
-| Vercel | Hobby plan | Yes | Hobby is for personal, non-commercial use: check this fits your team |
-| Netlify | 300 credits a month, hard cap (about 15 GB of traffic) | Yes | Plenty for this app; also takes a drag-and-drop of `dist/` |
-| GitHub Pages | Free | Public repos only (private needs a paid plan) | Needs a small Actions workflow |
-
-Free tiers change; check the host's pricing page before you rely on a number.
-
-**Cloudflare Pages, step by step:**
-
-1. This repository is on GitHub: `sahilaf/aimscribe-annotator`.
-2. Sign in at [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → Create**,
-   choose **Pages** and import the Git repository. (If the dashboard only offers a Worker, import
-   the repository there with the same settings; it serves `dist/` the same way.)
-3. Settings: *Framework preset* **Vite** (or none), *Root directory* left empty,
-   *Build command* `npm run build`, *Build output directory* `dist`.
-4. Under *Environment variables* add `NODE_VERSION` = `22`. Optionally also add
-   `VITE_GOOGLE_CLIENT_ID` instead of editing `public/config.js`.
-
-No GitHub connection needed? Run `npm run build` and use **Pages → Upload assets** to drag in the
-`dist` folder instead; then put the client ID in `public/config.js` before building.
-5. Deploy. Your address is like `https://aimscribe-annotator.pages.dev`. Add exactly that origin
-   to the OAuth client (step 1.6).
-
-On **Vercel**, import the repository with framework **Vite**; on **Netlify**, build command
-`npm run build` and publish directory `dist`.
-
-Hosting the code publicly is safe: it contains no data and no secret (an OAuth client ID is
-public by design). The built site carries a strict Content-Security-Policy: it can talk only to
-Google sign-in and the Drive API.
-
-## 5. Team workflow
-
-| Who | Does |
-| --- | --- |
-| Data lead | Adds the set folders under **Folders**, presses **Copy team link** and sends it. The link opens the same folders for a teammate after they sign in |
-| Annotator | Opens a file marked **To do**, corrects it segment by segment, ticks each one (**Check & next**), then **Mark as done** |
-| Reviewer | Opens a **Done** file, chooses **Review Rahim's annotation**, listens to a sample, then **Accept** or **Return** with a note. The annotator sees the note as a banner when they reopen the file |
-| Second annotator (test and development sets) | Opens a file someone has done and chooses **Start your own**: a separate file, so the two versions stay independent. **Hide draft text** keeps only the timings, for the one test file in five transcribed without a draft |
-
-Each person's work is a separate file, so nobody overwrites anyone. If the same file is saved
-from two places (a phone and a laptop, or a reviewer and the annotator at once), the app notices
-and asks which version to keep.
-
-**Team progress** on the files screen adds up, per annotator, files done, speech hours done, time
-worked and **hours per speech hour**: the *r* in the schedule formula of
-docs/02 (annotation and data use plan, in the main Aimscribe repository). Time counts only while a file is open,
-visible and touched in the last minute.
-
-## 6. Annotating
-
-**On a computer** the transcript is in the middle (speaker on the left, start and end times above
-and below each line), the selected segment's properties on the right, and the speaker-lane
-timeline along the bottom.
-
-**On a phone** times run down the left edge, a floating player sits at the bottom, and
-**Edit segment** opens a sheet with a zoomed waveform and two handles for the start and end.
-
-- Tap a segment to hear it. **Check & next** (the orange button) ticks it and plays the next one.
-  The **To check** and **Flagged** filters show unticked segments, or ones with highlights, a
-  missing speaker or `[missed speech?]`.
-- Drag the orange handles on the timeline (or the trimmer in the properties panel) to move a
-  segment's start or end; it plays that edge so a clipped word is heard at once. Tap to jump,
-  drag to pan, pinch or scroll to zoom.
-- **Insert** adds `[অস্পষ্ট]`, `<নাম>…</নাম>` and `<ওষুধ=Drug-list name>…</ওষুধ>`. Split, merge,
-  add and delete are in the same panel. Each speaker's role is set once under **Speakers**.
-- **Checks** runs the rules of `import_corrected.py`: Latin letters, digits, `[missed speech?]`
-  left in, empty, unassigned or over-long segments, a speaker overlapping themself, and drug tags
-  with Latin inside.
-- Undo and redo cover every change. Saving is automatic: to the device at once, to Drive a few
-  seconds after you stop. If the connection or the one-hour Google session drops, edits stay on
-  the device and upload when you reconnect or reopen the file.
-- Keyboard: Ctrl+Space play/pause, Esc replay, Ctrl+Enter check and next, Ctrl+↑/↓ previous and
-  next, Alt+1…9 speaker, Alt+[ and Alt+] start or end at the playhead. All of them are under
-  **⋯ → Keyboard shortcuts**.
-
-## Output
-
-`corrected/G01__rahim.json`:
-
-```json
-{
- "schema": "aimscribe-annotation/1",
- "audio": "G01", "audio_file": "G01.wav", "source": "annotation/G01.json", "start_mode": "draft",
- "annotator": {"email": "rahim@…", "name": "Rahim"},
- "status": "done",
- "review": {"by": "…", "name": "…", "at": "2026-11-27T10:12:00Z", "note": "…"},
- "duration": 912.4,
- "speakers": {"S1": {"role": "ডাক্তার"}, "S2": {"role": "রোগী"}},
- "notes": "", "time_spent_sec": 3720, "review_time_sec": 0,
- "segments": [
-  {"start": 3.6, "end": 8.9, "speaker": "S2", "text": "…", "overlap": false, "checked": true, "draft": "…"}
- ]
-}
-```
-
-`status` is `in_progress`, `done`, `returned` or `reviewed`. `draft` keeps the machine text each
-segment started from, so draft and corrected pairs can be compared later. The file list reads a
-summary from each file's Drive properties, so it loads without opening every file.
-
-Check a file and collect its drug names, from the main Aimscribe repository:
-
-```powershell
-python scripts/annotation/import_corrected.py corrected/G01__rahim.json out/G01.json data/lexicon/drug_spoken.csv
-```
-
-## Privacy and limits
-
-- Audio is downloaded into the browser's memory for playback and never written to the device.
-  Unsaved edits are kept in the browser's storage until they reach Drive, then removed.
-- The Google token is held in memory only and lasts an hour; the app then asks for one tap to
-  reconnect. Nothing is sent anywhere except Google.
-- Anyone a folder is shared with can still download it from Drive itself. The app does not change
-  that; the confidentiality agreement in docs/02 does.
-- The whole recording downloads before playback: about 2 MB per minute of 16 kHz audio, so a
-  15-minute file is about 29 MB. Use Wi-Fi on a phone when you can.
-- Needs a current browser (Chrome, Edge, Firefox, or Safari 16 and later). Light and dark follow
-  the device setting.
+Cloudflare Workers Free allows 100,000 requests a day and 10 ms of CPU per request. The app's
+requests are small; audio is streamed, not processed. If the dashboard ever fails with a CPU limit
+error on very large folders, the Workers Paid plan (5 USD a month) removes it.
 
 ## Code
 
 | Path | Does |
 | --- | --- |
-| [src/screens/](src/screens/) | Sign-in, files, editor layouts (desktop and phone) |
-| [src/editor/](src/editor/) | Transcript rows, properties panel, timeline and trimmer canvases, player, dialogs |
-| [src/state/](src/state/) | Session (sign-in, folders, file list) and editor (segments, undo, saving) stores |
-| [src/components/ui/](src/components/ui/) | shadcn/ui components, restyled: pill buttons, an `ink` variant |
-| [src/lib/](src/lib/) | Plain JS, also used by the tests: Drive calls, folder matching, draft formats, checks, audio, demo data |
-| [src/index.css](src/index.css) | Design tokens: warm paper, charcoal ink, one orange accent, mono for times |
-
-Tests for the folder matching, the draft readers and the checks:
-
-```powershell
-npm test
-```
+| [worker/](worker/) | Backend: sign-in, access rules, Drive as the owner, the state file, a fake Drive for local tests |
+| [src/screens/](src/screens/) | Sign-in, waiting, my tasks, admin dashboard, editor |
+| [src/admin/](src/admin/) | Dashboard tabs: overview, tasks, people, settings |
+| [src/editor/](src/editor/) | Transcript rows, properties panel, timeline, player |
+| [src/state/](src/state/) | Session and editor stores (saving, undo, conflicts) |
+| [src/lib/](src/lib/) | API client, folder matching, draft formats, checks, audio, demo data |
+| [wrangler.jsonc](wrangler.jsonc) | Cloudflare Worker settings (no secrets) |

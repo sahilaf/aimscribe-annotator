@@ -1,7 +1,9 @@
-import { ArrowRight, Lock, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Lock, Sparkles, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Logo, MonoLabel } from "@/components/bits";
-import { CLIENT_ID, signIn, useSession } from "@/state/session";
+import { CLIENT_ID, signIn, devSignIn, startDemo, useSession } from "@/state/session";
 
 function GoogleG() {
   return (
@@ -14,12 +16,25 @@ function GoogleG() {
   );
 }
 
+function DevSignIn() {
+  const [email, setEmail] = useState("admin@demo.test");
+  return (
+    <form className="mt-5 grid gap-2 rounded-2xl border border-dashed p-4" onSubmit={(e) => { e.preventDefault(); devSignIn(email); }}>
+      <p className="flex items-center gap-2 text-sm font-medium"><FlaskConical className="size-4" /> Local test backend</p>
+      <p className="text-xs text-muted-foreground">Sign in as anyone. <code className="font-mono">admin@demo.test</code> is the admin.</p>
+      <div className="flex gap-2">
+        <Input value={email} onChange={(e) => setEmail(e.target.value)} className="h-10 rounded-full" />
+        <Button type="submit" variant="outline" className="h-10">Go</Button>
+      </div>
+    </form>
+  );
+}
+
 export function SignIn() {
-  const { driveReady, signinError, pendingRoots } = useSession();
+  const { apiReady, signinError, backendDemo } = useSession();
   const hint = localStorage.getItem("aimscribe:hint");
   return (
     <div className="relative flex min-h-full items-center justify-center overflow-hidden p-5">
-      {/* soft light from one corner, like the reference renders */}
       <div className="pointer-events-none absolute -top-40 -left-40 size-[520px] rounded-full bg-primary/10 blur-3xl" />
       <div className="pointer-events-none absolute -right-32 -bottom-48 size-[480px] rounded-full bg-ink/5 blur-3xl" />
       <div className="relative w-full max-w-[400px]">
@@ -30,34 +45,25 @@ export function SignIn() {
             Correct Bangla consultation transcripts by listening, on your phone or computer.
           </p>
 
-          {pendingRoots && (
-            <p className="mt-5 rounded-2xl bg-secondary px-4 py-3 text-sm">
-              You were sent a project link. Sign in with the Google account the folders are shared with.
-            </p>
-          )}
-
           <div className="mt-7 grid gap-2.5">
-            <Button variant="ink" className="h-12 text-[15px]" disabled={!CLIENT_ID || !driveReady} onClick={() => signIn(false)}>
+            <Button variant="ink" className="h-12 text-[15px]" disabled={!CLIENT_ID || !apiReady} onClick={() => signIn()}>
               <span className="grid size-6 place-items-center rounded-full bg-white"><GoogleG /></span>
               {hint ? `Continue as ${hint}` : "Continue with Google"}
             </Button>
-            <Button variant="ghost" className="h-11 text-muted-foreground" onClick={() => signIn(true)}>
+            <Button variant="ghost" className="h-11 text-muted-foreground" onClick={startDemo}>
               <Sparkles /> Try the demo <ArrowRight className="opacity-60" />
             </Button>
           </div>
 
-          {!CLIENT_ID && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Google sign-in isn’t set up yet: add your OAuth client ID to <code className="font-mono text-foreground">public/config.js</code>. The demo works without it.
-            </p>
-          )}
+          {backendDemo && <DevSignIn />}
           {signinError && <p className="mt-4 text-sm text-destructive">{signinError}</p>}
         </div>
 
         <div className="mt-5 flex items-start gap-2.5 px-3">
           <Lock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
           <MonoLabel className="normal-case tracking-normal leading-relaxed">
-            Audio plays from memory and is never stored on this device. Your edits go to the Drive folders shared with you.
+            Google is used only to confirm your email. You get no access to anyone’s Drive; you see only the files the project lead assigns to you.{" "}
+            <a href="./privacy" className="underline underline-offset-2 hover:text-foreground">Privacy</a>
           </MonoLabel>
         </div>
       </div>

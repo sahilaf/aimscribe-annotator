@@ -30,4 +30,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), csp()],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
   build: { chunkSizeWarningLimit: 800 }, // one small single-page app: no need to split
+  // `npm run dev` + `npm run dev:api`: the site on :8000 talks to the local Worker on :8787
+  server: { proxy: { "/api": "http://127.0.0.1:8787" } },
 });

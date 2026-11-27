@@ -176,3 +176,6 @@ export function resetDemo() {
   localStorage.removeItem(KEY);
   for (const k of Object.keys(localStorage)) if (k.startsWith("aimscribe:local:demo:")) localStorage.removeItem(k);
 }
+
+// Shared with the local test backend (worker/fake-drive.ts).
+export const DEMO_DATA = { ROOT, STATIC, TEXTS, AUDIO, D01, D02, D03 };

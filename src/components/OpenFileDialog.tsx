@@ -90,7 +90,7 @@ function Choices({ item, onPick }: { item: Item; onPick: (p: StartPlan) => void 
           <ScanSearch className="size-4 text-muted-foreground" />
         </button>
       ))}
-      {!own && (
+      {!own && (item.access?.annotate ?? true) && (
         <div className="mt-3 rounded-2xl border border-dashed p-4">
           <p className="mb-3 flex items-center gap-2 font-medium"><FileText className="size-4" /> Or start your own</p>
           <StartFrom item={item} onPick={onPick} />

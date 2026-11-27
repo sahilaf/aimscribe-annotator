@@ -74,3 +74,11 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 
 export const naturalCompare = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+
+/** Drive folder link or bare id -> id. Accepts drive.google.com/drive/folders/ID, ?id=ID, /u/0/... */
+export function folderIdFrom(input) {
+  const s = String(input || "").trim();
+  const m = s.match(/\/folders\/([A-Za-z0-9_-]{10,})/) || s.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : null;
+}

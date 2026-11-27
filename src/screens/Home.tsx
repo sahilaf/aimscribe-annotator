@@ -1,31 +1,28 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FolderOpen, Link2, LogOut, Plus, RefreshCw, RotateCcw, Search, Trash2, CloudOff, Sun, Moon, Monitor } from "lucide-react";
+import { ChevronDown, ChevronRight, Inbox, LayoutDashboard, LogOut, RefreshCw, RotateCcw, Search, CloudOff, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuRadioGroup, DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Logo, StatusPad, STATUS_LABEL, Initials, MonoLabel, MetaChip } from "@/components/bits";
-import { useSession, addFolder, removeFolder, loadProject, selectSet, copyTeamLink, signOut } from "@/state/session";
+import { useSession, loadProject, selectSet, signOut } from "@/state/session";
 import { openItem, pendingLocal } from "@/state/editor";
 import { confirm } from "@/state/dialogs";
 import { itemStatus } from "@/lib/project.js";
 import { fmtAgo, fmtHours, fmtMB } from "@/lib/util.js";
 import { resetDemo } from "@/lib/demo.js";
-import { useDesktop } from "@/hooks/use-media";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { DataSet, Item } from "@/editor/types";
 
-type F = "all" | "todo" | "in_progress" | "returned" | "done" | "reviewed" | "mine";
+type F = "all" | "todo" | "in_progress" | "returned" | "done" | "reviewed" | "mine" | "review";
 
 export function Home() {
-  const { project, setId, roots, listing, listError, user, store } = useSession();
-  const [foldersOpen, setFoldersOpen] = useState(false);
+  const { project, setId, listing, listError, store } = useSession();
   const set = project?.sets.find((s) => s.id === setId) || project?.sets[0];
   return (
     <div className="min-h-full">
@@ -34,45 +31,39 @@ export function Home() {
           <Logo />
           <div className="leading-tight">
             <p className="font-semibold tracking-tight">AIMScribe</p>
-            <MonoLabel className="text-[10px]">Annotator</MonoLabel>
+            <MonoLabel className="text-[10px]">{store?.kind === "demo" ? "Demo" : "Annotator"}</MonoLabel>
           </div>
           <div className="flex-1" />
-          {store?.kind !== "demo" && (
-            <Button variant="outline" size="sm" className="h-9" onClick={() => setFoldersOpen(true)}>
-              <FolderOpen /> <span className="hidden sm:inline">Folders</span>
-            </Button>
-          )}
-          <UserMenu />
+          <UserMenu onRefresh={() => loadProject()} />
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
-        {!roots.length ? (
-          <EmptyState />
-        ) : listing && !project ? (
+        {listing && !project ? (
           <ListSkeleton text={listing} />
         ) : listError ? (
           <div className="mt-10 rounded-3xl border bg-card p-6">
-            <p className="font-medium text-destructive">Could not read the folders</p>
+            <p className="font-medium text-destructive">Could not load your files</p>
             <p className="mt-1 text-sm text-muted-foreground">{listError}</p>
             <Button variant="outline" className="mt-4" onClick={() => loadProject()}><RefreshCw /> Try again</Button>
           </div>
         ) : set ? (
           <SetView set={set} />
-        ) : (
-          <div className="mt-10 rounded-3xl border bg-card p-6 text-muted-foreground">
-            No audio found in these folders. Add the folder that holds <code className="font-mono">audio16k/</code>.
+        ) : project ? (
+          <div className="mx-auto mt-20 max-w-md rounded-[28px] border bg-card p-8 text-center shadow-soft">
+            <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-secondary"><Inbox className="size-5" /></div>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight">No files assigned yet</h1>
+            <p className="mt-2 text-[15px] text-muted-foreground">When the project lead assigns you recordings, they appear here.</p>
+            <Button variant="outline" className="mt-6" onClick={() => loadProject()}><RefreshCw /> Check again</Button>
           </div>
-        )}
+        ) : null}
       </main>
-      <FoldersSheet open={foldersOpen} onOpenChange={setFoldersOpen} />
-      {user && null}
     </div>
   );
 }
 
-function UserMenu() {
-  const { user, store } = useSession();
+export function UserMenu({ onRefresh, extra }: { onRefresh?: () => void; extra?: React.ReactNode }) {
+  const { user, store, me } = useSession();
   const [theme, setThemeState] = useState<Theme>(getTheme());
   if (!user) return null;
   return (
@@ -86,8 +77,13 @@ function UserMenu() {
         <DropdownMenuLabel className="font-normal">
           <p className="font-medium">{user.name}</p>
           <p className="truncate font-mono text-xs text-muted-foreground">{user.email}</p>
+          {me && <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{me.role}</p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {extra}
+        {me?.isAdmin && useSession.getState().screen !== "admin" && (
+          <DropdownMenuItem onClick={() => useSession.setState({ screen: "admin", returnTo: "admin" })}><LayoutDashboard /> Admin dashboard</DropdownMenuItem>
+        )}
         {store?.kind === "demo" && (
           <DropdownMenuItem onClick={async () => { if (await confirm("Reset the demo?", "Deletes the demo annotations saved in this browser.", "Reset", "Cancel", true)) { resetDemo(); loadProject(); } }}>
             <RotateCcw /> Reset demo data
@@ -103,7 +99,7 @@ function UserMenu() {
           ))}
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => loadProject()}><RefreshCw /> Refresh files</DropdownMenuItem>
+        {onRefresh && <DropdownMenuItem onClick={onRefresh}><RefreshCw /> Refresh</DropdownMenuItem>}
         <DropdownMenuItem onClick={signOut}><LogOut /> Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -111,7 +107,8 @@ function UserMenu() {
 }
 
 function SetView({ set }: { set: DataSet }) {
-  const { project, user, listing } = useSession();
+  const { project, user, listing, store } = useSession();
+  const demo = store?.kind === "demo";
   const [filter, setFilter] = useState<F>("all");
   const [q, setQ] = useState("");
   const me = user!.email;
@@ -126,25 +123,28 @@ function SetView({ set }: { set: DataSet }) {
       if (st === "done" || st === "reviewed") speech += Math.max(0, ...it.outputs.filter((o) => o.status === st).map((o) => o.speech));
     }
     const mine = set.items.filter((it) => it.outputs.some((o) => o.annotator === me)).length;
-    return { by, speech, size, mine };
+    const review = set.items.filter(needsMyReview).length;
+    return { by, speech, size, mine, review };
   }, [set, me]);
 
   const items = set.items.filter((it) => {
     if (q && !it.base.toLowerCase().includes(q.toLowerCase())) return false;
     if (filter === "mine") return it.outputs.some((o) => o.annotator === me);
+    if (filter === "review") return needsMyReview(it);
     return filter === "all" || itemStatus(it) === filter;
   });
   const pending = pendingLocal();
   const total = set.items.length || 1;
   const filters: [F, string, number][] = [
     ["all", "All", set.items.length], ["todo", "To do", stats.by.todo], ["in_progress", "In progress", stats.by.in_progress],
-    ["returned", "Returned", stats.by.returned], ["done", "Done", stats.by.done], ["reviewed", "Reviewed", stats.by.reviewed], ["mine", "Mine", stats.mine],
+    ["returned", "Returned", stats.by.returned], ["done", "Done", stats.by.done], ["reviewed", "Reviewed", stats.by.reviewed],
+    ...(demo ? [["mine", "Mine", stats.mine] as [F, string, number]] : []), ...(stats.review ? [["review", "To review", stats.review] as [F, string, number]] : []),
   ];
 
   return (
     <>
       <section className="pt-8 sm:pt-10">
-        <MonoLabel>Dataset</MonoLabel>
+        <MonoLabel>{demo ? "Dataset" : "My tasks"}</MonoLabel>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-3">
           {project!.sets.length > 1 ? (
             <DropdownMenu>
@@ -232,10 +232,13 @@ function SetView({ set }: { set: DataSet }) {
         </div>
       </section>
 
-      <TeamCard />
+      {demo && <TeamCard />}
     </>
   );
 }
+
+/** A reviewer's file with a finished annotation waiting for them. */
+const needsMyReview = (it: Item) => !!it.access?.review && !it.access?.annotate && it.outputs.some((o) => o.status === "done");
 
 function FileRow({ item, first }: { item: Item; first: boolean }) {
   const me = useSession((s) => s.user!.email);
@@ -335,79 +338,5 @@ function ListSkeleton({ text }: { text: string }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function AddFolderForm({ autoFocus = false }: { autoFocus?: boolean }) {
-  const [v, setV] = useState("");
-  const [busy, setBusy] = useState(false);
-  return (
-    <form className="flex gap-2" onSubmit={async (e) => {
-      e.preventDefault();
-      if (!v.trim()) return;
-      setBusy(true);
-      try { await addFolder(v.trim()); setV(""); } catch (err) { toast.error((err as Error).message); }
-      setBusy(false);
-    }}>
-      <Input autoFocus={autoFocus} value={v} onChange={(e) => setV(e.target.value)} inputMode="url" placeholder="Paste a Google Drive folder link" className="h-11 flex-1 rounded-full px-4" />
-      <Button type="submit" variant="ink" className="h-11 px-5" disabled={busy}><Plus /> Add</Button>
-    </form>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="mx-auto max-w-xl pt-16 sm:pt-24">
-      <div className="rounded-[28px] border bg-card p-7 shadow-soft sm:p-9">
-        <div className="grid size-12 place-items-center rounded-2xl bg-secondary"><FolderOpen className="size-5" /></div>
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight">Connect a Drive folder</h1>
-        <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
-          Paste the link of a set folder, the one that holds <code className="font-mono text-foreground">audio16k/</code> and <code className="font-mono text-foreground">drafts_scribe/</code> or <code className="font-mono text-foreground">annotation/</code>. A parent folder works too.
-        </p>
-        <div className="mt-6"><AddFolderForm autoFocus /></div>
-        <pre className="mt-6 overflow-x-auto rounded-2xl bg-secondary p-4 font-mono text-xs leading-relaxed text-muted-foreground">{`test_set/
-  audio16k/G01.wav
-  annotation/G01.json      ← used first
-  drafts_scribe/G01.json
-  corrected/               ← your work is saved here`}</pre>
-      </div>
-    </div>
-  );
-}
-
-function FoldersSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const roots = useSession((s) => s.roots);
-  const desktop = useDesktop();
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side={desktop ? "right" : "bottom"} className={cn("gap-0 p-0", desktop ? "w-[420px] sm:max-w-[420px]" : "max-h-[88dvh] rounded-t-[28px]")}>
-        <SheetHeader className="p-6 pb-2">
-          <MonoLabel>Project</MonoLabel>
-          <SheetTitle className="text-xl">Folders</SheetTitle>
-          <SheetDescription>The Drive folders this app reads. Removing one here deletes nothing on Drive.</SheetDescription>
-        </SheetHeader>
-        <div className="grid gap-5 overflow-y-auto p-6 pt-4">
-          <div className="overflow-hidden rounded-2xl border">
-            {roots.map((r, i) => (
-              <div key={r.id} className={cn("flex items-center gap-3 px-4 py-3", i && "border-t")}>
-                <FolderOpen className="size-4 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{r.name}</p>
-                  <p className="truncate font-mono text-[11px] text-muted-foreground">{r.id}</p>
-                </div>
-                <Button variant="ghost" size="icon-sm" aria-label={`Remove ${r.name}`} onClick={() => removeFolder(r.id)}><Trash2 /></Button>
-              </div>
-            ))}
-            {!roots.length && <p className="px-4 py-6 text-center text-sm text-muted-foreground">No folders yet.</p>}
-          </div>
-          <AddFolderForm />
-          <div className="rounded-2xl bg-secondary p-4">
-            <p className="text-sm font-medium">Invite the team</p>
-            <p className="mt-1 text-sm text-muted-foreground">The link opens these folders after sign-in. Share the folders with them on Drive too.</p>
-            <Button variant="outline" className="mt-3" onClick={copyTeamLink}><Link2 /> Copy team link</Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
   );
 }

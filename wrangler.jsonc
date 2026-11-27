@@ -1,0 +1,21 @@
+// Cloudflare Worker: serves the built site (dist/) and the /api backend (worker/index.ts).
+// Secrets are added in the Cloudflare dashboard (Settings → Variables and Secrets), never here:
+//   GOOGLE_CLIENT_SECRET  ADMIN_EMAILS  DRIVE_REFRESH_TOKEN
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aimscribe-annotator",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "build": { "command": "npm run build:web" },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "GOOGLE_CLIENT_ID": "285266232303-pifn3lmtami33mmccikfof141r2c9sb4.apps.googleusercontent.com"
+  },
+  "keep_vars": true,
+  "observability": { "enabled": true }
+}
