@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Inbox, LayoutDashboard, LogOut, RefreshCw, RotateCcw, Search, CloudOff, Sun, Moon, Monitor } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Inbox, LayoutDashboard, LogOut, RefreshCw, RotateCcw, Search, CloudOff, Sun, Moon, Monitor } from "lucide-react";
+import { openGuide } from "@/components/Guide";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ export function Home() {
             <MonoLabel className="text-[10px]">{store?.kind === "demo" ? "Demo" : "Annotator"}</MonoLabel>
           </div>
           <div className="flex-1" />
+          <Button variant="ghost" size="sm" onClick={() => openGuide()} className="rounded-full"><BookOpen /> Guide</Button>
           <UserMenu onRefresh={() => loadProject()} />
         </div>
       </header>
@@ -81,6 +83,7 @@ export function UserMenu({ onRefresh, extra }: { onRefresh?: () => void; extra?:
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {extra}
+        <DropdownMenuItem onClick={() => openGuide()}><BookOpen /> Annotation guide</DropdownMenuItem>
         {me?.isAdmin && useSession.getState().screen !== "admin" && (
           <DropdownMenuItem onClick={() => useSession.setState({ screen: "admin", returnTo: "admin" })}><LayoutDashboard /> Admin dashboard</DropdownMenuItem>
         )}

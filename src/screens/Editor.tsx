@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import {
-  ArrowLeft, Check, CircleAlert, CircleCheck, CloudOff, Download, FileJson, Keyboard, Loader2, MoreHorizontal, NotebookPen, Redo2, RotateCcw,
+  ArrowLeft, BookOpen, Check, CircleAlert, CircleCheck, CloudOff, Download, FileJson, Keyboard, Loader2, MoreHorizontal, NotebookPen, Redo2, RotateCcw,
   ShieldCheck, Undo2, Users, X, Settings2, Cloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { TranscriptList, EditorFilters } from "@/editor/TranscriptList";
 import { Inspector, SegmentSheet, insertText } from "@/editor/Inspector";
 import { ChecksDialog, SpeakersDialog, KeysDialog, RestartDialog, useIssues } from "@/editor/Panels";
 import { player } from "@/editor/player";
+import { openGuide } from "@/components/Guide";
 import {
   useEditor, activeSeg, closeEditor, undo, redo, togglePlay, replay, checkAndNext, step, boundaryHere, split, mergeNext,
   setSpeaker, toggleOverlap, saveRemote, markDone, reopen, review, speakersOf,
@@ -127,6 +128,7 @@ function EditorMenu({ desktop }: { desktop: boolean }) {
           </>
         )}
         <DropdownMenuItem onClick={() => saveRemote(true).catch(() => {})}><Cloud /> Save to Drive now</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openGuide()}><BookOpen /> Annotation guide</DropdownMenuItem>
         {desktop && <DropdownMenuItem onClick={() => panel("keys")}><Keyboard /> Keyboard shortcuts</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="flex items-center gap-2 font-mono text-[11px] font-normal uppercase tracking-wider text-muted-foreground"><Settings2 className="size-3.5" /> Playback</DropdownMenuLabel>

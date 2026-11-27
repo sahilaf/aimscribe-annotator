@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Hourglass, LogOut, RefreshCw } from "lucide-react";
+import { BookOpen, Hourglass, LogOut, RefreshCw } from "lucide-react";
+import { openGuide } from "@/components/Guide";
 import { Button } from "@/components/ui/button";
 import { Logo, MonoLabel, Initials } from "@/components/bits";
 import { useSession, refreshMe, signOut } from "@/state/session";
@@ -29,7 +30,8 @@ export function Waiting() {
           <MonoLabel className="text-[10px]">Signed in as</MonoLabel>
           <p className="mt-0.5 truncate font-mono text-sm">{me?.email}</p>
         </div>
-        <div className="mt-6 flex gap-2">
+        <Button className="mt-6 w-full" onClick={() => openGuide()}><BookOpen /> Read the annotation guide while you wait</Button>
+        <div className="mt-2 flex gap-2">
           <Button variant="outline" className="flex-1" onClick={refreshMe}><RefreshCw /> Check now</Button>
           <Button variant="ghost" onClick={signOut}><LogOut /> Sign out</Button>
         </div>

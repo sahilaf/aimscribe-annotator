@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { DialogHost } from "@/components/DialogHost";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { OpenFileDialog } from "@/components/OpenFileDialog";
+import { GuidePage } from "@/components/Guide";
 import { Logo } from "@/components/bits";
 import { SignIn } from "@/screens/SignIn";
 import { Waiting } from "@/screens/Waiting";
@@ -24,6 +25,7 @@ export default function App() {
       {screen === "admin" && <Dashboard />}
       {screen === "editor" && <Editor />}
       <OpenFileDialog />
+      <GuidePage />
       <DialogHost />
       <LoadingOverlay />
       <Toaster position={desktop ? "bottom-right" : "top-center"} offset={desktop ? 24 : 16} />

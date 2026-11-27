@@ -13,7 +13,7 @@ const HAS_FONT = /<font\b/i;
 export const stripMarks = (s) => String(s ?? "").replace(FONT_TAG, "");
 
 // Pre-clean colours (scripts/annotation/preclean_drafts.py)
-const MARK_CLASS = { "#ff4d4d": "mk-red", "#3399ff": "mk-blue", "#ff9900": "mk-orange" };
+const MARK_CLASS = { "#ff4d4d": "mk-red", "#3399ff": "mk-blue", "#ff9900": "mk-orange", "#d4a017": "mk-gold" };
 const LOW_LOGPROB = -1.0; // same default as preclean_drafts.py --min_logprob
 
 const num = (x) => (x == null || x === "" || isNaN(+x) ? null : +x);
